@@ -1,4 +1,4 @@
-import discord, json, os
+import discord, json, os, asyncio
 from discord.ext import commands
 from keep_alive import keep_alive
 
@@ -13,7 +13,7 @@ def check(msg):
 @client.event
 async def on_ready():
     print('Connected as:')
-    print('{}: {}'.format(client.user.name, client.user.id))
+    print(f"{client.user.name}: {client.user.id}")
     print(f'Prefix: {prefix}')
     print('--------------')
 
@@ -39,8 +39,6 @@ async def setup(ctx, canal: discord.TextChannel = None):
             channels[str(ctx.guild.id)] = canal.id
 
         bot_msg = await ctx.send(f"Canal establecido a {canal.name}")
-        await ctx.message.delete(delay=2)
-        await bot_msg.delete(delay=2)
     else:
         await ctx.send()
 
@@ -52,28 +50,56 @@ async def setup_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send(f"No tienes permiso para ejecutar este comando, hace falta el permiso de Administrador para poder ejecutar este comando. :confused:")
 
-def check_channel(ctx):
-    with open("channels.json") as r:
-        channels = json.loads(r.read())
-    return ctx.channel.id == channels[str(ctx.guild.id)]
-
 @client.command()
-@commands.check(check_channel)
 async def private(ctx, *, name):
     with open("channels.json") as r:
         channels = json.loads(r.read())
 
     channel = await client.fetch_channel(channels[str(ctx.guild.id)])
-    await ctx.message.delete(delay=2)
-    new = await ctx.guild.create_voice_channel(name=name, category=channel.category)
+    if ctx.channel.id != channels[str(ctx.guild.id)]:
+        await ctx.send(f"Por favor, manda el mensaje en el canal correspondiente! {channel.mention}")
+        return
+
+    new = await ctx.guild.create_voice_channel(name=name, reason=f"Solicitado por {ctx.author.name}#{ctx.author.discriminator}")
+
+    if channel.category is not None:
+        new.edit(category=channel.category)
+
     try:
         await new.set_permissions(ctx.author, read_messages=True, connect=True)
         await new.set_permissions(ctx.guild.default_role, read_messages=False, connect=False)
         created_msg = await ctx.send("Canal creado")
         await created_msg.delete(delay=2)
+        await ctx.message.delete(delay=2)
     except discord.Forbidden:
         perms_msg = await ctx.send("Me faltan permisos")
+        await new.delete(reason="Permiso de modificar roles y modificar canales necesario para establecer los permisos del canal")
         perms_msg.delete(delay=2)
+
+@private.error
+async def private_error(ctx, error):
+    await ctx.send("Hace falta usar el comando `.setup` entes de este!\n(Para más información escribe `.help`)")
+
+@client.command(hidden=True)
+@commands.check(commands.is_owner())
+async def botinfo(ctx):
+    info = await client.application_info()
+    embed = discord.Embed(title=f"Información sobre {client.user.name}", description="By Mr. Appu", color=0x2c2f33, author=ctx.author)
+    embed.set_thumbnail(url=client.user.avatar_url)
+    embed.add_field(name="Latencia:", value=round(client.latency*1000))
+    embed.add_field(name="Número de servidores:", value=len(client.guilds))
+    embed.add_field(name="Caché lista?", value=client.is_ready())
+    embed.add_field(name="Id del propietario:", value=info.owner.id)
+    embed.add_field(name="Equipo:", value=info.team.name)
+    embed.add_field(name="Bot público?", value=info.bot_public)
+    embed.add_field(name="ID:", value=info.id)
+    # embed.add_field(name="", value=)
+    # embed.add_field(name="", value=)
+    # embed.add_field(name="", value=)
+    # embed.add_field(name="", value=)
+    # embed.add_field(name="", value=)
+
+    await ctx.send(embed=embed)
 
 @client.command(hidden=True)
 @commands.check(commands.is_owner())
