@@ -45,6 +45,9 @@ async def setup(ctx, canal: discord.TextChannel = None):
     with open("channels.json", "w") as w:
         json.dump(channels, w, indent=4, sort_keys=True)
 
+    await ctx.message.delete(delay=2)
+    await bot_msg.delete(delay=2)
+
 @setup.error
 async def setup_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
@@ -63,7 +66,7 @@ async def private(ctx, *, name):
     new = await ctx.guild.create_voice_channel(name=name, reason=f"Solicitado por {ctx.author.name}#{ctx.author.discriminator}")
 
     if channel.category is not None:
-        new.edit(category=channel.category)
+        await new.edit(category=channel.category)
 
     try:
         await new.set_permissions(ctx.author, read_messages=True, connect=True)
@@ -78,6 +81,7 @@ async def private(ctx, *, name):
 
 @private.error
 async def private_error(ctx, error):
+    print((ctx.guild.name, error))
     await ctx.send("Hace falta usar el comando `.setup` entes de este!\n(Para más información escribe `.help`)")
 
 @client.command(hidden=True)
